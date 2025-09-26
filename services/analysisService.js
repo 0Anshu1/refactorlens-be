@@ -5,7 +5,6 @@ const { ImpactScorer } = require('../analyzers/impactScorer');
 const { SecurityScanner } = require('../analyzers/securityScanner');
 const logger = require('../utils/logger');
 const { analyzeWithAI } = require('./aiService');
-const Analysis = require('../models/Analysis');
 const { ASTAnalyzer } = require('../analyzers/astAnalyzer');
 const { RefactorClassifier } = require('../analyzers/refactorClassifier');
 const { ImpactScorer } = require('../analyzers/impactScorer');

@@ -43,6 +43,7 @@ app.get('/health', (req, res) => {
 
 // API routes
 app.use('/api/v1', analysisRoutes);
+app.use('/api/chatbot', require('./routes/chatbot'));
 
 // Error handling middleware
 app.use(errorHandler);
