@@ -21,7 +21,7 @@ class AnalysisService {
 
   async analyzeCodePair(analysisId, request) {
     const startTime = Date.now();
-    
+    const { normalizeScores, weightedScore, kpiRankings, kpiAverages, KPIS } = require('../models/KPIFramework');
     try {
       //status update to processing
       await Analysis.findOneAndUpdate(
@@ -36,7 +36,7 @@ class AnalysisService {
         request.legacy,
         request.language
       );
-      
+
       const refactoredAST = await this.astAnalyzer.parseCode(
         request.refactored,
         request.language
@@ -91,6 +91,24 @@ class AnalysisService {
       // Step 7: Generate suggestions
       const suggestions = this.generateSuggestions(refactorTypes, riskFlags);
 
+      // Step 8: KPI-driven analysis (example: compare tools, original vs refactored)
+      // For demonstration, assume request.tools = [{ tool: 'Original', scores: {...} }, { tool: 'Refactored', scores: {...} }, ...]
+      let kpiResults = null;
+      if (request.tools && Array.isArray(request.tools) && request.tools.length > 0) {
+        const normalized = normalizeScores(request.tools);
+        const weighted = weightedScore(normalized);
+        const rankings = kpiRankings(normalized);
+        const averages = kpiAverages(request.tools);
+        kpiResults = {
+          rawScores: request.tools,
+          normalizedScores: normalized,
+          weightedScores: weighted,
+          kpiRankings: rankings,
+          kpiAverages: averages,
+          kpiList: KPIS
+        };
+      }
+
       // Compile results
       const results = {
         overallScore: impactMetrics.overallScore,
@@ -101,7 +119,8 @@ class AnalysisService {
         files: astDiffs.files,
         riskFlags,
         suggestedNextSteps: suggestions,
-        metrics: impactMetrics.detailed
+        metrics: impactMetrics.detailed,
+        kpiAnalysis: kpiResults
       };
 
       // Update analysis with results
@@ -119,7 +138,7 @@ class AnalysisService {
 
     } catch (error) {
       logger.error(`Analysis ${analysisId} failed:`, error);
-      
+
       await Analysis.findOneAndUpdate(
         { id: analysisId },
         {
