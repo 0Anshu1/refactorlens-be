@@ -39,10 +39,29 @@ if (process.env.NODE_ENV === 'production') {
 }
 
 app.use(cors({
-  origin: process.env.NODE_ENV === 'production' 
-    ? [process.env.FRONTEND_URL, 'https://refactorlens-fe.vercel.app'] 
-    : ['http://localhost:3000'],
-  credentials: true
+  origin: function (origin, callback) {
+    // Allow requests with no origin (like mobile apps or curl requests)
+    if (!origin) return callback(null, true);
+    
+    const allowedOrigins = [
+      process.env.FRONTEND_URL,
+      'https://refactorlens-fe.vercel.app',
+      'http://localhost:3000'
+    ].filter(Boolean);
+
+    // Check if origin is allowed or if it's a Vercel preview URL
+    const isAllowed = allowedOrigins.includes(origin) || 
+                      origin.endsWith('.vercel.app');
+
+    if (isAllowed) {
+      callback(null, true);
+    } else {
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
 }));
 
 // Rate limiting
