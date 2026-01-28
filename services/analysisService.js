@@ -1,4 +1,6 @@
 const Analysis = require('../models/Analysis');
+const User = require('../models/User');
+const { sendEmail } = require('../utils/mail');
 const { ASTAnalyzer } = require('../analyzers/astAnalyzer');
 const { RefactorClassifier } = require('../analyzers/refactorClassifier');
 const { ImpactScorer } = require('../analyzers/impactScorer');
@@ -133,15 +135,33 @@ class AnalysisService {
       };
 
       // Update analysis with results
-      await Analysis.findOneAndUpdate(
+      const updatedAnalysis = await Analysis.findOneAndUpdate(
         { id: analysisId },
         {
           status: 'completed',
           results,
           completedAt: new Date(),
           processingTimeMs: Date.now() - startTime
-        }
+        },
+        { new: true }
       );
+
+      // Send completion email if user is present
+      if (updatedAnalysis.user) {
+        try {
+          const user = await User.findById(updatedAnalysis.user);
+          if (user && user.email) {
+            await sendEmail({
+              to: user.email,
+              subject: `Analysis Complete: ${analysisId}`,
+              text: `Hi ${user.name || 'there'},\n\nYour code analysis (${analysisId}) is complete. You can view the results in the RefactorLens dashboard.\n\nSummary: ${results.summary}\nOverall Score: ${results.overallScore}\n\nBest regards,\nThe RefactorLens Team`,
+              html: `<h1>Analysis Complete</h1><p>Hi ${user.name || 'there'},</p><p>Your code analysis (<strong>${analysisId}</strong>) is complete. You can view the results in the RefactorLens dashboard.</p><p><strong>Summary:</strong> ${results.summary}<br><strong>Overall Score:</strong> ${results.overallScore}</p><p>Best regards,<br>The RefactorLens Team</p>`
+            });
+          }
+        } catch (e) {
+          logger.error(`Failed to send analysis completion email for ${analysisId}:`, e);
+        }
+      }
 
       logger.info(`Analysis ${analysisId} completed in ${Date.now() - startTime}ms`);
 

@@ -11,21 +11,46 @@ function initQueue() {
     return null;
   }
 
-  analysisQueue = new Bull('analysis', redisUrl, {
-    defaultJobOptions: { attempts: 1, removeOnComplete: true, removeOnFail: true }
-  });
+  const redisOptions = {
+    redis: {
+      maxRetriesPerRequest: null,
+      enableReadyCheck: false
+    }
+  };
 
-  analysisQueue.process(async (job) => {
-    const { analysisId, request } = job.data;
-    await analyzeCodePair(analysisId, request);
-  });
+  // Add TLS support for production Redis (e.g. Railway, Heroku)
+  if (redisUrl.startsWith('rediss://')) {
+    redisOptions.redis.tls = {
+      rejectUnauthorized: false
+    };
+  }
 
-  analysisQueue.on('error', (err) => {
-    logger.error('Analysis queue error:', err);
-  });
+  try {
+    analysisQueue = new Bull('analysis', redisUrl, {
+      ...redisOptions,
+      defaultJobOptions: { attempts: 1, removeOnComplete: true, removeOnFail: true }
+    });
 
-  logger.info('Analysis queue initialized');
-  return analysisQueue;
+    analysisQueue.process(async (job) => {
+      const { analysisId, request } = job.data;
+      const { analyzeCodePair } = require('../services/analysisService');
+      await analyzeCodePair(analysisId, request);
+    });
+
+    analysisQueue.on('error', (err) => {
+      logger.error('Analysis queue error:', err);
+    });
+
+    analysisQueue.on('ready', () => {
+      logger.info('Analysis queue connected to Redis');
+    });
+
+    logger.info('Analysis queue initialized');
+    return analysisQueue;
+  } catch (error) {
+    logger.error('Failed to initialize analysis queue:', error);
+    return null;
+  }
 }
 
 async function enqueueAnalysis(analysisId, request) {

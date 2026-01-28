@@ -33,7 +33,9 @@ if (process.env.NODE_ENV === 'production') {
 }
 
 app.use(cors({
-  origin: process.env.NODE_ENV === 'production' ? false : ['http://localhost:3000'],
+  origin: process.env.NODE_ENV === 'production' 
+    ? [process.env.FRONTEND_URL, 'https://refactorlens-fe.vercel.app'] 
+    : ['http://localhost:3000'],
   credentials: true
 }));
 
@@ -50,7 +52,7 @@ app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
 // Health check endpoint
-app.get('/health', (req, res) => {
+app.get('/api/v1/health', (req, res) => {
   res.json({ 
     status: 'healthy', 
     timestamp: new Date().toISOString(),
@@ -61,7 +63,7 @@ app.get('/health', (req, res) => {
 // API routes
 app.use('/api/v1/auth', authRoutes);
 app.use('/api/v1', analysisRoutes);
-app.use('/api/chatbot', require('./routes/chatbot'));
+app.use('/api/v1/chatbot', require('./routes/chatbot'));
 app.use('/api/v1/org', require('./routes/org'));
 
 // Serve static assets in production

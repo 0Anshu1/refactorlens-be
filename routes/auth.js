@@ -4,6 +4,7 @@ const User = require('../models/User');
 const Organization = require('../models/Organization');
 const OrgSettings = require('../models/OrgSettings');
 const { hashPassword, comparePassword, signToken } = require('../utils/auth');
+const { sendEmail } = require('../utils/mail');
 
 // POST /api/v1/auth/signup
 router.post('/signup', async (req, res, next) => {
@@ -27,6 +28,18 @@ router.post('/signup', async (req, res, next) => {
     const passwordHash = await hashPassword(password);
     const user = new User({ email, passwordHash, name, role: 'admin', org: org._id });
     await user.save();
+
+    // Send welcome email
+    try {
+      await sendEmail({
+        to: email,
+        subject: 'Welcome to RefactorLens!',
+        text: `Hi ${name || 'there'},\n\nWelcome to RefactorLens! Your account has been successfully created.\n\nBest regards,\nThe RefactorLens Team`,
+        html: `<h1>Welcome to RefactorLens!</h1><p>Hi ${name || 'there'},</p><p>Welcome to RefactorLens! Your account has been successfully created.</p><p>Best regards,<br>The RefactorLens Team</p>`
+      });
+    } catch (e) {
+      console.error('Failed to send welcome email:', e);
+    }
 
     const token = signToken({ sub: user._id, org: org._id, role: user.role });
     res.json({ token, user: { id: user._id, email: user.email, name: user.name, org: org._id } });

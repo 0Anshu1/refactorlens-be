@@ -139,7 +139,11 @@ const analysisSchema = new mongoose.Schema({
     default: Date.now
   },
   completedAt: Date,
-  processingTimeMs: Number
+  processingTimeMs: Number,
+  user: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User'
+  }
 });
 
 // Indexes for better query performance

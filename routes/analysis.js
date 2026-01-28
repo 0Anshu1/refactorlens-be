@@ -97,6 +97,7 @@ router.post('/analyze', requireAuth, upload.array('files'), parseMultipartJson, 
     const analysis = new Analysis({
       id: analysisId,
       ...req.body,
+      user: req.user ? req.user.id : null,
       org: req.org ? req.org._id : null,
       status: 'pending'
     });
