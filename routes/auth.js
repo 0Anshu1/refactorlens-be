@@ -6,6 +6,61 @@ const OrgSettings = require('../models/OrgSettings');
 const { hashPassword, comparePassword, signToken } = require('../utils/auth');
 const { sendEmail } = require('../utils/mail');
 const passport = require('passport');
+const admin = require('../utils/firebase');
+
+// POST /api/v1/auth/firebase
+router.post('/firebase', async (req, res, next) => {
+  try {
+    const { idToken } = req.body;
+    if (!idToken) return res.status(400).json({ error: 'idToken is required' });
+
+    const decodedToken = await admin.auth().verifyIdToken(idToken);
+    const { email, name, uid, picture } = decodedToken;
+
+    let user = await User.findOne({ firebaseUid: uid });
+    if (!user) {
+      user = await User.findOne({ email });
+      if (user) {
+        user.firebaseUid = uid;
+        if (!user.name) user.name = name;
+        await user.save();
+      } else {
+        // Create new user
+        // We might need a default organization for social logins
+        let defaultOrg = await Organization.findOne({ name: 'Default' });
+        if (!defaultOrg) {
+          defaultOrg = new Organization({ name: 'Default', type: 'other' });
+          await defaultOrg.save();
+          const settings = new OrgSettings({ org: defaultOrg._id });
+          await settings.save();
+        }
+
+        user = new User({
+          firebaseUid: uid,
+          email,
+          name: name || email.split('@')[0],
+          role: 'user',
+          org: defaultOrg._id
+        });
+        await user.save();
+      }
+    }
+
+    const token = signToken({ sub: user._id, org: user.org, role: user.role });
+    res.json({ 
+      token, 
+      user: { 
+        id: user._id, 
+        email: user.email, 
+        name: user.name, 
+        org: user.org 
+      } 
+    });
+  } catch (err) {
+    console.error('Firebase token verification error:', err);
+    res.status(401).json({ error: 'Invalid Firebase token' });
+  }
+});
 
 // Google Auth
 router.get('/google', (req, res, next) => {

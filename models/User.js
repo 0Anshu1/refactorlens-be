@@ -6,6 +6,7 @@ const UserSchema = new Schema({
   passwordHash: { type: String },
   googleId: { type: String, unique: true, sparse: true },
   githubId: { type: String, unique: true, sparse: true },
+  firebaseUid: { type: String, unique: true, sparse: true },
   name: { type: String },
   role: { type: String, enum: ['admin', 'member', 'user'], default: 'user' },
   org: { type: Schema.Types.ObjectId, ref: 'Organization' },
