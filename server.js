@@ -85,21 +85,41 @@ app.get('/api/v1/health', (req, res) => {
   let version = '1.0.0';
   
   if (fs.existsSync(packagePath)) {
-    version = require(packagePath).version;
+    try {
+      version = JSON.parse(fs.readFileSync(packagePath, 'utf8')).version;
+    } catch (e) {}
   }
 
+  const dbStatus = {
+    connected: mongoose.connection.readyState === 1,
+    state: ['disconnected', 'connected', 'connecting', 'disconnecting'][mongoose.connection.readyState] || 'unknown'
+  };
+
   res.json({ 
-    status: 'healthy', 
+    status: dbStatus.connected ? 'healthy' : 'degraded', 
+    database: dbStatus,
     timestamp: new Date().toISOString(),
-    version
+    version,
+    env: process.env.NODE_ENV || 'development'
   });
 });
 
+// Middleware to check DB connection
+const checkDBConnection = (req, res, next) => {
+  if (mongoose.connection.readyState !== 1) {
+    return res.status(503).json({ 
+      error: 'Database connection not ready',
+      message: 'The server is currently unable to connect to the database. Please try again in a few moments.'
+    });
+  }
+  next();
+};
+
 // API routes
-app.use('/api/v1/auth', authRoutes);
-app.use('/api/v1', analysisRoutes);
-app.use('/api/v1/chatbot', require('./routes/chatbot'));
-app.use('/api/v1/org', require('./routes/org'));
+app.use('/api/v1/auth', checkDBConnection, authRoutes);
+app.use('/api/v1', checkDBConnection, analysisRoutes);
+app.use('/api/v1/chatbot', checkDBConnection, require('./routes/chatbot'));
+app.use('/api/v1/org', checkDBConnection, require('./routes/org'));
 
 // Serve static assets in production (if build folder exists)
 if (process.env.NODE_ENV === 'production') {
@@ -133,23 +153,20 @@ app.use('*', (req, res) => {
 const connectDB = async () => {
   const mongoURI = process.env.MONGODB_URI || 'mongodb://localhost:27017/refactorlens';
   const mongoOptions = {
-    serverSelectionTimeoutMS: 5000, // Keep trying to connect for 5 seconds
-    socketTimeoutMS: 45000, // Close sockets after 45 seconds of inactivity
-    family: 4 // Use IPv4, skip trying IPv6
+    serverSelectionTimeoutMS: 30000, // Increase to 30 seconds for cloud deployments
+    socketTimeoutMS: 45000,
+    family: 4,
+    heartbeatFrequencyMS: 10000 // Check connection every 10s
   };
 
   try {
-    logger.info(`Connecting to MongoDB at ${mongoURI.split('@').pop()}...`);
+    logger.info(`Connecting to MongoDB... (Target: ${mongoURI.split('@').pop().split('/')[0]})`);
     await mongoose.connect(mongoURI, mongoOptions);
     logger.info('Connected to MongoDB successfully');
   } catch (error) {
     logger.error('MongoDB connection error:', error.message);
-    if (process.env.NODE_ENV === 'production') {
-      logger.error('Exiting process due to database connection failure in production');
-      process.exit(1);
-    } else {
-      logger.warn('Continuing in development mode without MongoDB. Some features will be unavailable.');
-    }
+    logger.warn('Server will continue to run, but database-dependent features will fail.');
+    // Do NOT process.exit(1) as it causes 502s in production during transient failures
   }
 };
 
