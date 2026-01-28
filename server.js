@@ -50,8 +50,9 @@ app.use(cors({
     ].filter(Boolean);
 
     // Check if origin is allowed or if it's a Vercel preview URL
-    const isAllowed = allowedOrigins.includes(origin) || 
-                      origin.endsWith('.vercel.app');
+    const isAllowed = !origin || 
+                      allowedOrigins.includes(origin) || 
+                      (origin && origin.endsWith('.vercel.app'));
 
     if (isAllowed) {
       callback(null, true);
@@ -160,14 +161,20 @@ mongoose.connection.on('disconnected', () => {
   logger.warn('Mongoose disconnected. Attempting to reconnect...');
 });
 
-connectDB();
-
 // Start server
-app.listen(PORT, () => {
+const server = app.listen(PORT, '0.0.0.0', () => {
   logger.info(`RefactorLens server running on port ${PORT}`);
   logger.info(`Environment: ${process.env.NODE_ENV || 'development'}`);
-  // Initialize queue after server starts
-  try { initQueue(); } catch (e) { logger.error('Queue init failed', e); }
+  
+  // Connect to database after server starts to avoid 502s during slow connection
+  connectDB().then(() => {
+    // Initialize queue after DB is ready
+    try { 
+      initQueue(); 
+    } catch (e) { 
+      logger.error('Queue init failed', e); 
+    }
+  });
 });
 
-module.exports = app;
+module.exports = server;
