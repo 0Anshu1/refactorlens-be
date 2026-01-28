@@ -130,21 +130,35 @@ app.use('*', (req, res) => {
 
 // Database connection
 const connectDB = async () => {
+  const mongoURI = process.env.MONGODB_URI || 'mongodb://localhost:27017/refactorlens';
+  const mongoOptions = {
+    serverSelectionTimeoutMS: 5000, // Keep trying to connect for 5 seconds
+    socketTimeoutMS: 45000, // Close sockets after 45 seconds of inactivity
+    family: 4 // Use IPv4, skip trying IPv6
+  };
+
   try {
-    await mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/refactorlens', {
-      useNewUrlParser: true,
-      useUnifiedTopology: true,
-    });
-    logger.info('Connected to MongoDB');
+    logger.info(`Connecting to MongoDB at ${mongoURI.split('@').pop()}...`);
+    await mongoose.connect(mongoURI, mongoOptions);
+    logger.info('Connected to MongoDB successfully');
   } catch (error) {
-    logger.error('MongoDB connection error:', error);
+    logger.error('MongoDB connection error:', error.message);
     if (process.env.NODE_ENV === 'production') {
+      logger.error('Exiting process due to database connection failure in production');
       process.exit(1);
     } else {
       logger.warn('Continuing in development mode without MongoDB. Some features will be unavailable.');
     }
   }
 };
+
+mongoose.connection.on('error', err => {
+  logger.error('Mongoose connection error after initial connection:', err);
+});
+
+mongoose.connection.on('disconnected', () => {
+  logger.warn('Mongoose disconnected. Attempting to reconnect...');
+});
 
 connectDB();
 
