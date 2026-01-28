@@ -17,6 +17,11 @@ const logger = require('./utils/logger');
 const app = express();
 const PORT = process.env.PORT || 4000;
 
+// Trust proxy for production environments (e.g., Railway, Vercel, Heroku)
+if (process.env.NODE_ENV === 'production') {
+  app.set('trust proxy', 1);
+}
+
 // Security middleware
 app.use(helmet({
   contentSecurityPolicy: false, // Disable CSP for easier development, enable and configure for production
