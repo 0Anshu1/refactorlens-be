@@ -5,6 +5,45 @@ const Organization = require('../models/Organization');
 const OrgSettings = require('../models/OrgSettings');
 const { hashPassword, comparePassword, signToken } = require('../utils/auth');
 const { sendEmail } = require('../utils/mail');
+const passport = require('passport');
+
+// Google Auth
+router.get('/google', (req, res, next) => {
+  if (!process.env.GOOGLE_CLIENT_ID || !process.env.GOOGLE_CLIENT_SECRET) {
+    return res.status(501).json({ error: 'Google OAuth not configured' });
+  }
+  passport.authenticate('google', { scope: ['profile', 'email'] })(req, res, next);
+});
+
+router.get('/google/callback', passport.authenticate('google', { session: false, failureRedirect: '/login' }), (req, res) => {
+  const token = signToken({ sub: req.user._id, org: req.user.org, role: req.user.role });
+  const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+  res.redirect(`${frontendUrl}/login?token=${token}&user=${encodeURIComponent(JSON.stringify({
+    id: req.user._id,
+    email: req.user.email,
+    name: req.user.name,
+    org: req.user.org
+  }))}`);
+});
+
+// GitHub Auth
+router.get('/github', (req, res, next) => {
+  if (!process.env.GITHUB_CLIENT_ID || !process.env.GITHUB_CLIENT_SECRET) {
+    return res.status(501).json({ error: 'GitHub OAuth not configured' });
+  }
+  passport.authenticate('github', { scope: ['user:email'] })(req, res, next);
+});
+
+router.get('/github/callback', passport.authenticate('github', { session: false, failureRedirect: '/login' }), (req, res) => {
+  const token = signToken({ sub: req.user._id, org: req.user.org, role: req.user.role });
+  const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+  res.redirect(`${frontendUrl}/login?token=${token}&user=${encodeURIComponent(JSON.stringify({
+    id: req.user._id,
+    email: req.user.email,
+    name: req.user.name,
+    org: req.user.org
+  }))}`);
+});
 
 // POST /api/v1/auth/signup
 router.post('/signup', async (req, res, next) => {
