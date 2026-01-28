@@ -3,9 +3,13 @@ const cors = require('cors');
 const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
 const mongoose = require('mongoose');
+const compression = require('compression');
+const morgan = require('morgan');
+const path = require('path');
 require('dotenv').config();
 
 const analysisRoutes = require('./routes/analysis');
+const authRoutes = require('./routes/auth');
 const { initQueue } = require('./queue/queue');
 const { errorHandler } = require('./middleware/errorHandler');
 const logger = require('./utils/logger');
@@ -14,7 +18,20 @@ const app = express();
 const PORT = process.env.PORT || 4000;
 
 // Security middleware
-app.use(helmet());
+app.use(helmet({
+  contentSecurityPolicy: false, // Disable CSP for easier development, enable and configure for production
+}));
+
+// Compression for better performance
+app.use(compression());
+
+// Logging middleware
+if (process.env.NODE_ENV === 'production') {
+  app.use(morgan('combined', { stream: { write: (message) => logger.info(message.trim()) } }));
+} else {
+  app.use(morgan('dev'));
+}
+
 app.use(cors({
   origin: process.env.NODE_ENV === 'production' ? false : ['http://localhost:3000'],
   credentials: true
@@ -42,8 +59,22 @@ app.get('/health', (req, res) => {
 });
 
 // API routes
+app.use('/api/v1/auth', authRoutes);
 app.use('/api/v1', analysisRoutes);
 app.use('/api/chatbot', require('./routes/chatbot'));
+app.use('/api/v1/org', require('./routes/org'));
+
+// Serve static assets in production
+if (process.env.NODE_ENV === 'production') {
+  // Set static folder
+  app.use(express.static(path.join(__dirname, '../client/build')));
+
+  app.get('*', (req, res) => {
+    if (!req.path.startsWith('/api/')) {
+      res.sendFile(path.resolve(__dirname, '../client', 'build', 'index.html'));
+    }
+  });
+}
 
 // Error handling middleware
 app.use(errorHandler);
@@ -57,17 +88,24 @@ app.use('*', (req, res) => {
 });
 
 // Database connection
-mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/refactorlens', {
-  useNewUrlParser: true,
-  useUnifiedTopology: true,
-})
-.then(() => {
-  logger.info('Connected to MongoDB');
-})
-.catch((error) => {
-  logger.error('MongoDB connection error:', error);
-  process.exit(1);
-});
+const connectDB = async () => {
+  try {
+    await mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/refactorlens', {
+      useNewUrlParser: true,
+      useUnifiedTopology: true,
+    });
+    logger.info('Connected to MongoDB');
+  } catch (error) {
+    logger.error('MongoDB connection error:', error);
+    if (process.env.NODE_ENV === 'production') {
+      process.exit(1);
+    } else {
+      logger.warn('Continuing in development mode without MongoDB. Some features will be unavailable.');
+    }
+  }
+};
+
+connectDB();
 
 // Start server
 app.listen(PORT, () => {

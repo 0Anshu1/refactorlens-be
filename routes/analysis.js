@@ -10,6 +10,7 @@ const { validateRequest } = require('../middleware/validation');
 const logger = require('../utils/logger');
 
 const router = express.Router();
+const { requireAuth } = require('../middleware/authMiddleware');
 
 // Configure multer for file uploads
 const storage = multer.memoryStorage();
@@ -71,8 +72,24 @@ const analysisRequestSchema = Joi.object({
   }).default({})
 });
 
+// Middleware to parse JSON strings in multipart/form-data
+const parseMultipartJson = (req, res, next) => {
+  if (req.is('multipart/form-data')) {
+    ['legacy', 'refactored', 'options'].forEach(field => {
+      if (typeof req.body[field] === 'string') {
+        try {
+          req.body[field] = JSON.parse(req.body[field]);
+        } catch (e) {
+          // Ignore if not valid JSON, Joi will catch it
+        }
+      }
+    });
+  }
+  next();
+};
+
 // POST /api/v1/analyze - Start new analysis
-router.post('/analyze', upload.array('files'), validateRequest(analysisRequestSchema), async (req, res) => {
+router.post('/analyze', requireAuth, upload.array('files'), parseMultipartJson, validateRequest(analysisRequestSchema), async (req, res) => {
   try {
     const analysisId = uuidv4();
     
@@ -80,6 +97,7 @@ router.post('/analyze', upload.array('files'), validateRequest(analysisRequestSc
     const analysis = new Analysis({
       id: analysisId,
       ...req.body,
+      org: req.org ? req.org._id : null,
       status: 'pending'
     });
 
@@ -87,8 +105,10 @@ router.post('/analyze', upload.array('files'), validateRequest(analysisRequestSc
     
     logger.info(`Created analysis ${analysisId} for language ${req.body.language}`);
 
-    // Start analysis via queue (falls back to in-process if queue disabled)
-    await enqueueAnalysis(analysisId, req.body);
+  // Attach org to the request body so the worker can use org-specific settings
+  const jobRequest = { ...req.body, org: req.org ? req.org._id : null };
+  // Start analysis via queue (falls back to in-process if queue disabled)
+  await enqueueAnalysis(analysisId, jobRequest);
 
     res.status(202).json({
       id: analysisId,

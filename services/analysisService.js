@@ -5,11 +5,6 @@ const { ImpactScorer } = require('../analyzers/impactScorer');
 const { SecurityScanner } = require('../analyzers/securityScanner');
 const logger = require('../utils/logger');
 const { analyzeWithAI } = require('./aiService');
-const { ASTAnalyzer } = require('../analyzers/astAnalyzer');
-const { RefactorClassifier } = require('../analyzers/refactorClassifier');
-const { ImpactScorer } = require('../analyzers/impactScorer');
-const { SecurityScanner } = require('../analyzers/securityScanner');
-const logger = require('../utils/logger');
 
 class AnalysisService {
   constructor() {
@@ -95,8 +90,22 @@ class AnalysisService {
       // For demonstration, assume request.tools = [{ tool: 'Original', scores: {...} }, { tool: 'Refactored', scores: {...} }, ...]
       let kpiResults = null;
       if (request.tools && Array.isArray(request.tools) && request.tools.length > 0) {
+        // If org provided, try to fetch org-specific KPI weights
+        let orgWeights = null;
+        if (request.org) {
+          try {
+            const OrgSettings = require('../models/OrgSettings');
+            const settings = await OrgSettings.findOne({ org: request.org });
+            if (settings && settings.kpiWeights) {
+              orgWeights = Object.fromEntries(settings.kpiWeights);
+            }
+          } catch (e) {
+            logger.warn('Failed to load org settings for KPI weights:', e.message);
+          }
+        }
+
         const normalized = normalizeScores(request.tools);
-        const weighted = weightedScore(normalized);
+        const weighted = weightedScore(normalized, orgWeights || undefined);
         const rankings = kpiRankings(normalized);
         const averages = kpiAverages(request.tools);
         kpiResults = {
