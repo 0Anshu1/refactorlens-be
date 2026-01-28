@@ -66,16 +66,21 @@ app.use('/api/v1', analysisRoutes);
 app.use('/api/v1/chatbot', require('./routes/chatbot'));
 app.use('/api/v1/org', require('./routes/org'));
 
-// Serve static assets in production
+// Serve static assets in production (if build folder exists)
 if (process.env.NODE_ENV === 'production') {
-  // Set static folder
-  app.use(express.static(path.join(__dirname, '../client/build')));
-
-  app.get('*', (req, res) => {
-    if (!req.path.startsWith('/api/')) {
-      res.sendFile(path.resolve(__dirname, '../client', 'build', 'index.html'));
-    }
-  });
+  const buildPath = path.join(__dirname, '../client/build');
+  const fs = require('fs');
+  
+  if (fs.existsSync(buildPath)) {
+    app.use(express.static(buildPath));
+    app.get('*', (req, res) => {
+      if (!req.path.startsWith('/api/')) {
+        res.sendFile(path.resolve(buildPath, 'index.html'));
+      }
+    });
+  } else {
+    logger.info('Production mode: client/build folder not found. API-only mode.');
+  }
 }
 
 // Error handling middleware
