@@ -53,10 +53,18 @@ app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
 // Health check endpoint
 app.get('/api/v1/health', (req, res) => {
+  const fs = require('fs');
+  const packagePath = path.resolve(__dirname, 'package.json');
+  let version = '1.0.0';
+  
+  if (fs.existsSync(packagePath)) {
+    version = require(packagePath).version;
+  }
+
   res.json({ 
     status: 'healthy', 
     timestamp: new Date().toISOString(),
-    version: require('../package.json').version
+    version
   });
 });
 
