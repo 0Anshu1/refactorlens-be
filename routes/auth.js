@@ -91,6 +91,43 @@ router.post('/signup', async (req, res, next) => {
 router.post('/login', async (req, res, next) => {
   try {
     const { email, password } = req.body;
+
+    // Demo Credentials Support
+    if (email === 'demo@refactorlens.com' && password === 'demo123') {
+      let demoUser = await User.findOne({ email: 'demo@refactorlens.com' });
+      
+      if (!demoUser) {
+        // Create a demo organization if it doesn't exist
+        let demoOrg = await Organization.findOne({ name: 'Demo Org' });
+        if (!demoOrg) {
+          demoOrg = new Organization({ name: 'Demo Org', type: 'other' });
+          await demoOrg.save();
+          const settings = new OrgSettings({ org: demoOrg._id });
+          await settings.save();
+        }
+
+        demoUser = new User({
+          email: 'demo@refactorlens.com',
+          passwordHash: 'DEMO_RESTRICTED', // Not used for demo login
+          name: 'Demo User',
+          role: 'admin',
+          org: demoOrg._id
+        });
+        await demoUser.save();
+      }
+
+      const token = signToken({ sub: demoUser._id, org: demoUser.org, role: demoUser.role });
+      return res.json({ 
+        token, 
+        user: { 
+          id: demoUser._id, 
+          email: demoUser.email, 
+          name: demoUser.name, 
+          org: demoUser.org 
+        } 
+      });
+    }
+
     const user = await User.findOne({ email });
     if (!user) return res.status(401).json({ error: 'Invalid credentials' });
     const ok = await comparePassword(password, user.passwordHash);
